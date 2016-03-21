@@ -1,0 +1,213 @@
+---
+title: "Exploratory Analysis of SwiftKey Text Datasets"
+author: "Zhen Wang"
+date: "March 19, 2016"
+output: html_document
+---
+
+## Introduction
+
+Now people use mobile devices for email, social networking, banking, reading and writing, etc. But typing on mobile devices is often a serious pain. SwiftKey develops a smart keyboard that makes it easier to type on mobile devices. In this project, I will use SwiftKey text datasets to develop a predictive text model for English language, e.g., to predict the next word based on the first few words that people have typed on the keyboard. **In this Milestone Report, I conducted data acquisition and cleaning and exploratory analysis of the text documents to discover the structure in text data and how words are put together.** All the R codes used to develop this report are available in the .Rmd file available in my [GitHub repository][4].    
+
+```{r, echo=FALSE}
+## Set global and markdown global options
+knitr::opts_chunk$set(
+    cache       = TRUE,     
+    fig.width   = 8,       
+    fig.height  = 5,       
+    fig.align   = 'center', 
+    fig.path    = 'figs/',  
+    results     = 'markup',   
+    echo        = FALSE,    
+    message     = FALSE,     
+    strip.white = TRUE,     
+    warning     = FALSE)    
+
+save.scipen <- getOption("scipen") 
+options(scipen = 10)        
+```
+
+## Data Acquisition and Sampling
+
+The [text datasets][2] are provided by SwiftKey, our corporate partner in this project. The datasets contain text documents from blogs, news, and twitter sources in four different languages. Since this project aims to develop an online App for English text prediction, I will only analyze the English documents from the datasets. **Below is a summary of the file sizes, line numbers, and word counts of the three English datasets:**
+
+```{r}
+# obtaining the data
+if(!(file.exists("Coursera-SwiftKey.zip"))) {
+  fileUrl <- "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
+  download.file(fileUrl, "Coursera-SwiftKey.zip", method="curl")
+  unlink(fileUrl)
+}
+unzip("Coursera-SwiftKey.zip")
+
+# read the three English files into R
+
+con <- file("final/en_US/en_US.blogs.txt", "rb")
+blogs <- readLines(con, encoding = "UTF-8", skipNul = T) 
+close(con) 
+
+con <- file("final/en_US/en_US.twitter.txt", "rb")
+twitter <- readLines(con, encoding = "UTF-8", skipNul = T) 
+close(con) 
+
+con <- file("final/en_US/en_US.news.txt", "rb")
+news <- readLines(con, encoding = "UTF-8", skipNul = T) 
+close(con) 
+
+# check file size
+blogsSize <- file.info("final/en_US/en_US.blogs.txt")$size/(1024^2)
+newsSize <- file.info("final/en_US/en_US.news.txt")$size/(1024^2)
+twitterSize <- file.info("final/en_US/en_US.twitter.txt")$size/(1024^2)
+
+# calculate the file length
+blogsLen <- length(blogs)
+newsLen <- length(news)
+twitterLen <- length(twitter)
+
+# calculate the number of words 
+blogsWords <- sum(sapply(gregexpr("\\S+", blogs), length))
+twitterWords <- sum(sapply(gregexpr("\\S+", twitter), length))
+newsWords <- sum(sapply(gregexpr("\\S+", news), length))
+
+# table summary
+fileInfo <- data.frame(
+        fileName = c("Blogs","News","Twitter"),
+        fileSize_in_MB = c(round(blogsSize, digits = 2), 
+                     round(newsSize,digits = 2), 
+                     round(twitterSize, digits = 2)),
+        lineCount = c(blogsLen, newsLen, twitterLen),
+        wordCount = c(blogsWords, newsWords, twitterWords)                  
+)
+colnames(fileInfo) <- c("File Name", "File Size (MB)", "Number of Lines", "Number of Words")
+fileInfo
+```
+
+These are very large datasets (totally > 400 MB). To save development time and cost, I will use a subset of the data (random sampling 10% of original datasets) for the preliminary analysis until I optimize the text prediction algorithm later on. 
+
+```{r}
+percent <- 0.1
+set.seed(999)
+blogsSub <- sample(blogs, blogsLen*percent)
+twitterSub <- sample(twitter, twitterLen*percent)
+newsSub <- sample(news, newsLen*percent)
+text <- c(blogsSub, twitterSub, newsSub)
+write.table(text, "en_US_sample.txt", row.names = F, 
+            col.names = F, fileEncoding = "UTF-8")
+rm(blogs, news, twitter, blogsSub, 
+   twitterSub, newsSub) # clear large files from memory
+```
+
+## Text Cleaning, Tokenization, and Creating Document-Frequency Matrix
+
+Text prediction models can be developed by analyzing word frequencies, i.e., how words are put together in common text documents. In order to analyze word frequencies, I first split the text into words through a process known as tokenization, which involves converting all text to lower case, removing punctuation and digits, etc. Afterwards, I converted all text documents into a [document-term matrix][3], a mathematical matrix that describes the frequency of terms that occur in a collection of documents. In a document-term matrix, each row correspond to a text document (e.g., one blog, one news, or one twitter) in the collection, and each column correspond to a term (e.g., a word or a phrase). Transforming text documents into a mathematical matrix makes it possible to analyze text data using common data manipulation methods and statistical models. 
+
+I used the ["quanteda" R package][6] to tokenize text and form document-term matrices, since it provides convenient functions to manage texts in the form of corpus and performs faster than other packages such as "tm" and "RWeka".
+
+```{r}
+require(quanteda)
+mycorpus <- corpus(text)
+```
+
+**I performed the following data cleaning and transformation** by using the quanteda::dfm() function:
+
+1. Removed numbers, punctuation, and whitespace.
+2. Converted all texts into lower case.
+3. Removed Twitter characters (@ and #).
+4. Transformed the original text documents into document-term matrices. 
+
+**I chose not to do the following at this stage:**
+
+1. Stem words: because I think stemming words can cause undesired results in building text prediction models.
+2. Remove hyphens: because I think in most cases the hyphenated words should be treated as one word.
+3. Remove profanity words: this problem is a little complex. Either replacing or removing profanity words will affect the N-gram analysis (see below) and thus the text prediction accuracy. I think it would be easier to filter profanity words in a later step downstream from developing the prediction algorithm. 
+4. Remove non-English words from the documents: for the same reason as the point above.
+
+```{r}
+# Create a document-feature matrix
+mydfm1 <- dfm(mycorpus, verbose = TRUE, toLower = TRUE, ngrams = 1,
+             removeNumbers = TRUE, removePunct = TRUE, 
+             removeSeparators = TRUE, removeTwitter = TRUE, stem = FALSE)
+```
+
+### The document-term matrix can be easily visualized as a Word Cloud:
+
+```{r, fig.height  = 6, fig.width = 6}
+require(RColorBrewer)
+plot(mydfm1, max.words=200, random.order=F, # min.freq=60,
+     colors = brewer.pal(6, "Dark2"), scale = c(8, .5))
+```
+
+## N-gram Analysis
+
+Text prediction algorithms can be developed based on [N-gram][5] analysis. N-grams of texts are essentially a set of co-occurring words within a given window, i.e., of N numbers of words. **N-gram models are widely used in statistical natural language processing for predicting the next word given the first few based on a (N-1)-order Markov model. In order to develop such a model, I analyzed the term frequencies of unigram (N = 1), bigram (N = 2), and trigram (N = 3). The term frequencies are plotted for the top 20 words/phrases below.**
+
+```{r}
+# barplot(top20, horiz=T, las=1)
+require(ggplot2)
+
+freqPlot <- function(dfm, n=20, title){
+  top <- topfeatures(dfm, n)
+  ngram <- data.frame(text=factor(names(top), levels=names(top)), 
+                     frequency=top)
+  ggplot(ngram, aes(text, frequency)) +
+    geom_bar(stat = "identity", fill="red") +
+    labs(title=title, y="Term Frequency") +
+    theme(axis.text.x=element_text(angle=45, hjust=1))  
+}
+
+freqPlot(mydfm1, n=20, title="Top 20 Unigrams")
+
+mydfm2 <- dfm(mycorpus, verbose = TRUE, toLower = TRUE, 
+             removeNumbers = TRUE, removePunct = TRUE, 
+             removeSeparators = TRUE, removeTwitter = TRUE, 
+             ngrams = 2, concatenator = " ", stem = FALSE)
+freqPlot(mydfm2, n=20, title="Top 20 Bigrams")
+
+mydfm3 <- dfm(mycorpus, verbose = TRUE, toLower = TRUE, 
+             removeNumbers = TRUE, removePunct = TRUE, 
+             removeSeparators = TRUE, removeTwitter = TRUE, 
+             ngrams = 3, concatenator = " ", stem = FALSE)
+freqPlot(mydfm3, n=20, title="Top 20 Trigrams")
+```
+
+## Check Coverage of Top Unigrams, Bigrams and Trigrams
+
+In order to develop an accurate and efficient prediction algorithm, I want to include the right size of N-grams in the training dataset. The size should be large enough to ensure accuracy, but should not be too large to make the runtime unnecessarily long. Thus, I checked the coverage of the top unigrams, bigrams and trigrams:
+
+```{r}
+coveragePlot <- function(dfm, title, xLab, xmax=20000) {
+  Pct <- colSums(dfm)
+  Pct <- Pct/sum(Pct)
+  Pct <- Pct[order(Pct, decreasing = T)]
+  cumPct <- cumsum(Pct)
+  plot(cumPct, type="b", cex = .6, main=title,
+       xlab=xLab, ylab="Coverage", xlim=c(0, xmax))
+}
+
+coveragePlot(mydfm1, "Unigrams Coverage", "Number of Top Unigrams")
+coveragePlot(mydfm2, "Bigrams Coverage", "Number of Top Bigrams", 400000)
+coveragePlot(mydfm3, "Trigrams Coverage", "Number of Top Trigrams", 1000000)
+```
+
+## Summary and Future Work
+
+1. The unigrams simply provide word frequencies, while the bigrams and trigrams can be used for predicting the next word based on the first word and the first two words, respectively. 
+
+2. I will develop the text prediction algorithms based on the bigram and trigram analysis using the small subset of text data. If necessary, 4-grams and even longer N-grams can be explored for text prediction.
+
+3. Based on the coverage plots, a very large number of bigrams and trigrams need to be included to cover >90% or even just 50% of all word instances. I should figure out a way to improve the coverage efficiency.
+
+3. I need to optimize the R codes for the prediction algorithms to minimize the memory usage and runtime.
+
+4. Once I have a reasonable model developed on the small sample text, I'll use the entire SwiftKey dataset to train the prediction algorithm and test the accuracy. I will implement the model to filter profanity words and handle foreign language at that stage.
+
+5. Although the Twitter dataset has many more lines than news and blogs datasets, it has fewer words and smaller file size due to the word limit for each tweet (140 characters). The word limit may affect how people construct their sentences and thus the word frequencies in their sentences. I might consider building text prediction models with and without the twitter documents to see if it makes a difference.
+
+6. Finally, I'll use my text prediction algorithm to develop a Shiny app that takes a phrase in a text box input and outputs a prediction of the next word. Create a R Studio presentation pitching my algorithm and app to potential investors. 
+
+[1]:https://www.coursera.org/specializations/jhu-data-science?utm_source=gg&utm_medium=sem&device=c&keyword=data%20science%20john%20hopkins&matchtype=b&network=g&devicemodel=&adpostion=1t1&hide_mobile_promo&gclid=Cj0KEQjwlLm3BRDjnML3h9ic_vkBEiQABa5oeWFrAr4Lv9BbjxN9jYrroCrArsUB9CMlwahZYe2U8DIaAmu88P8HAQ
+[2]:https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip
+[3]:https://en.wikipedia.org/wiki/Document-term_matrix
+[4]:https://github.com/zweinstein/SwiftKey_Text_Prediction
+[5]:https://en.wikipedia.org/wiki/N-gram
+[6]:https://github.com/kbenoit/quanteda

@@ -1,0 +1,14 @@
+---
+title: "ReadMe"
+author: "Zhen Wang"
+date: "March 20, 2016"
+output: html_document
+---
+
+## Project Background
+
+This report is written as the intermediate Milestone Report for the Capstone Project of [Data Science Specialization][1] Certificate Program offered by Johns Hopkins University via Coursera. I received no training in analysis of text data and I do not plan to become a world's expert in natural language processing :) However, a big part of the fun and challenge in data science is figuring out how to work with new data types to build data products people need. By completing this project, I am practicing my skills as a data scientist to analyze a new data type, quickly get up to speed on a new application, and develop a useful model in a reasonable amount of time. 
+
+## Research Progress
+
+On March 20th, 2016, I have written an intermediate research report as "Exploratory_Analysis_of_SwiftKey.Rmd".

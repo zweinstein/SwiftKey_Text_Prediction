@@ -13,4 +13,4 @@ This report is written as the intermediate Milestone Report for the Capstone Pro
 
 On March 20th, 2016:
 * I have written an intermediate research report as "Exploratory_Analysis_of_SwiftKey.Rmd".
-* I published the .html file of the report on my Rpubs account:http://rpubs.com/zweinstein/Exploratory_Analysis_of_SwiftKey.
+* I published the .html file of the report on my Rpubs account: http://rpubs.com/zweinstein/Exploratory_Analysis_of_SwiftKey.

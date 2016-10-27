@@ -19,4 +19,4 @@ On April 24th, 2016:
 * I have developed very compact N-gram models and used them together with ["Stupid Backoff"](http://www.aclweb.org/anthology/D07-1090) algorithms to develop an Shiny App for content-based next word prediction.
 * Try the App out [here](https://zw-einstein.shinyapps.io/WordPrediction_v1/).
 * [Here](http://rpubs.com/zweinstein/NextWordPrediction) is a 5-page presentation pitching my App.
-* I will publish the source codes after the course deadline of the current session of the [Capstone Project](https://www.coursera.org/learn/data-science-project/). 
+* Published the source codes for my Shiny App (under /WordPrediction). 
